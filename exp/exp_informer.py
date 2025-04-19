@@ -82,7 +82,8 @@ class Exp_Informer(Exp_Basic):
             shuffle_flag = True; drop_last = True; batch_size = args.batch_size; freq=args.freq
         
         data_set=None  
-        if args.df==None:
+        
+        if args.df is None:
             data_set = Data(
                 root_path=args.root_path,
                 data_path=args.data_path,
