@@ -80,18 +80,36 @@ class Exp_Informer(Exp_Basic):
             Data = Dataset_Pred
         else:
             shuffle_flag = True; drop_last = True; batch_size = args.batch_size; freq=args.freq
-        data_set = Data(
-            root_path=args.root_path,
-            data_path=args.data_path,
-            flag=flag,
-            size=[args.seq_len, args.label_len, args.pred_len],
-            features=args.features,
-            target=args.target,
-            inverse=args.inverse,
-            timeenc=timeenc,
-            freq=freq,
-            cols=args.cols
-        )
+        
+        data_set=None  
+        if args.df==None:
+            data_set = Data(
+                root_path=args.root_path,
+                data_path=args.data_path,
+                flag=flag,
+                size=[args.seq_len, args.label_len, args.pred_len],
+                features=args.features,
+                target=args.target,
+                inverse=args.inverse,
+                timeenc=timeenc,
+                freq=freq,
+                cols=args.cols
+            )
+        else:
+            data_set = Dataset_Custom(
+                df=args.df,
+                root_path=args.root_path,
+                data_path=args.data_path,
+                flag=flag,
+                size=[args.seq_len, args.label_len, args.pred_len],
+                features=args.features,
+                target=args.target,
+                inverse=args.inverse,
+                timeenc=timeenc,
+                freq=freq,
+                cols=args.cols
+            )
+            
         print(flag, len(data_set))
         data_loader = DataLoader(
             data_set,
