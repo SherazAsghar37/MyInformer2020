@@ -320,7 +320,10 @@ class Dataset_Pred(Dataset):
 
     def __read_data__(self):
         self.scaler = StandardScaler()
-        df_raw = pd.read_csv(os.path.join(self.root_path,
+        if(self.df is not None):
+            df_raw = self.df.copy() 
+        else:
+            df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
         '''
         df_raw.columns: ['date', ...(other features), target feature]
