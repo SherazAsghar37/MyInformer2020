@@ -83,22 +83,7 @@ class Exp_Informer(Exp_Basic):
         
         data_set=None  
         
-        if args.df is None:
-            data_set = Data(
-                root_path=args.root_path,
-                data_path=args.data_path,
-                flag=flag,
-                size=[args.seq_len, args.label_len, args.pred_len],
-                features=args.features,
-                target=args.target,
-                inverse=args.inverse,
-                timeenc=timeenc,
-                freq=freq,
-                cols=args.cols
-            )
-        else:
-            data_set = Dataset_Custom(
-                df=args.df,
+        data_set = Data(
                 root_path=args.root_path,
                 data_path=args.data_path,
                 flag=flag,
