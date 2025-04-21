@@ -93,7 +93,7 @@ class Exp_Informer(Exp_Basic):
                 inverse=args.inverse,
                 timeenc=timeenc,
                 freq=freq,
-                cols=args.cols
+                cols=args.cols,
                 df = args.df,
             )
             
