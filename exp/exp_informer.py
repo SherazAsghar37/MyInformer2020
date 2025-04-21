@@ -94,6 +94,7 @@ class Exp_Informer(Exp_Basic):
                 timeenc=timeenc,
                 freq=freq,
                 cols=args.cols
+                df = args.df,
             )
             
         print(flag, len(data_set))
