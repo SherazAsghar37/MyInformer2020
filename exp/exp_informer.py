@@ -255,7 +255,34 @@ class Exp_Informer(Exp_Basic):
         preds = np.array(preds)
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         
-        pred_data.predictions.insert(1, column="prediction",value=preds[:,0,:])
+        # Properly format predictions to match with prediction dates
+        if preds.shape[-1] == 1:  # Single feature case
+            pred_data.predictions["prediction"] = preds[:, :, 0].flatten()
+        else:  # Multi-feature case
+            # For multiple features, create column for each feature
+            feature_names = []
+            if self.args.features == 'MS' or self.args.features == 'M':
+                if isinstance(self.args.target, list):
+                    feature_names = self.args.target
+                else:
+                    # If specific columns are used from the dataset
+                    if hasattr(pred_data, 'cols') and pred_data.cols is not None:
+                        feature_names = [f"feature_{i}" for i in range(preds.shape[-1])]
+                        # Try to use actual column names if they exist
+                        if hasattr(self.args, 'cols') and self.args.cols is not None:
+                            if isinstance(self.args.cols, list) and len(self.args.cols) >= preds.shape[-1]:
+                                feature_names = self.args.cols[:preds.shape[-1]]
+            else:  # Single target feature was used (but might have multiple timesteps in output)
+                feature_names = [self.args.target]
+                
+            # Handle case where feature names aren't well-defined
+            if not feature_names:
+                feature_names = [f"feature_{i}" for i in range(preds.shape[-1])]
+                
+            # Add prediction columns for each feature
+            for i in range(preds.shape[-1]):
+                column_name = f"prediction_{feature_names[i]}" if len(feature_names) > i else f"prediction_{i}"
+                pred_data.predictions[column_name] = preds[:, :, i].flatten()
         
         # result save
         folder_path = './results/' + setting +'/'
