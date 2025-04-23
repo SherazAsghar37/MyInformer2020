@@ -255,7 +255,8 @@ class Exp_Informer(Exp_Basic):
         preds = np.array(preds)
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         
-        pred_data.predictions.insert(1, preds)
+        pred_data.predictions.insert(1, column="prediction",value=preds[:,0,:])
+        
         # result save
         folder_path = './results/' + setting +'/'
         if not os.path.exists(folder_path):
