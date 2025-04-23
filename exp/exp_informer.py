@@ -6,7 +6,7 @@ from utils.tools import EarlyStopping, adjust_learning_rate
 from utils.metrics import metric
 
 import numpy as np
-
+import pandas as pd
 import torch
 import torch.nn as nn
 from torch import optim
@@ -324,3 +324,143 @@ class Exp_Informer(Exp_Basic):
         batch_y = batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
 
         return outputs, batch_y
+
+    def retrain(self, setting, new_data=None, epochs=6, learning_rate=None):
+        """
+        Retrain the model with new data to adapt to recent changes.
+        
+        Args:
+            setting (str): The model setting name for saving checkpoints
+            new_data (pd.DataFrame, optional): New data to retrain the model with
+            epochs (int): Number of epochs for retraining
+            learning_rate (float, optional): Custom learning rate for retraining
+        
+        Returns:
+            The retrained model
+        """
+        if new_data is not None:
+            # Store original data and temporarily replace with new data for training
+            original_df = self.args.df
+            self.args.df = new_data
+        
+        # Save original parameters to restore later
+        original_epochs = self.args.train_epochs
+        original_lr = self.args.learning_rate
+        original_patience = self.args.patience
+        
+        # Set new parameters for retraining
+        self.args.train_epochs = epochs
+        if learning_rate is not None:
+            self.args.learning_rate = learning_rate
+            
+        # Use shorter patience for fine-tuning
+        self.args.patience = max(3, epochs // 3)
+        
+        # Get updated training data with new observations
+        train_data, train_loader = self._get_data(flag='train')
+        vali_data, vali_loader = self._get_data(flag='val')
+        test_data, test_loader = self._get_data(flag='test')
+        
+        path = os.path.join(self.args.checkpoints, setting)
+        if not os.path.exists(path):
+            os.makedirs(path)
+            
+        # Check if a model has already been trained
+        checkpoint_path = os.path.join(path, 'checkpoint.pth')
+        if os.path.exists(checkpoint_path):
+            print(f"Loading existing model from {checkpoint_path} for retraining")
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            self.model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        
+        time_now = time.time()
+        
+        train_steps = len(train_loader)
+        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
+        
+        # Use a smaller learning rate for retraining if not specified
+        if learning_rate is None:
+            self.args.learning_rate = self.args.learning_rate / 10.0
+            
+        model_optim = self._select_optimizer()
+        criterion = self._select_criterion()
+        
+        if self.args.use_amp:
+            scaler = torch.cuda.amp.GradScaler()
+            
+        print(f"Retraining model for {epochs} epochs...")
+        for epoch in range(self.args.train_epochs):
+            iter_count = 0
+            train_loss = []
+            
+            self.model.train()
+            epoch_time = time.time()
+            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(train_loader):
+                iter_count += 1
+                
+                model_optim.zero_grad()
+                pred, true = self._process_one_batch(
+                    train_data, batch_x, batch_y, batch_x_mark, batch_y_mark)
+                loss = criterion(pred, true)
+                train_loss.append(loss.item())
+                
+                if (i+1) % 100 == 0:
+                    print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
+                    speed = (time.time()-time_now)/iter_count
+                    left_time = speed*((self.args.train_epochs - epoch)*train_steps - i)
+                    print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
+                    iter_count = 0
+                    time_now = time.time()
+                
+                if self.args.use_amp:
+                    scaler.scale(loss).backward()
+                    scaler.step(model_optim)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    model_optim.step()
+            
+            print("Epoch: {} cost time: {}".format(epoch+1, time.time()-epoch_time))
+            train_loss = np.average(train_loss)
+            vali_loss = self.vali(vali_data, vali_loader, criterion)
+            test_loss = self.vali(test_data, test_loader, criterion)
+            
+            print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Test Loss: {4:.7f}".format(
+                epoch + 1, train_steps, train_loss, vali_loss, test_loss))
+            early_stopping(vali_loss, self.model, path)
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
+                
+            adjust_learning_rate(model_optim, epoch+1, self.args)
+        
+        # Load the best model after retraining
+        best_model_path = os.path.join(path, 'checkpoint.pth')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.load_state_dict(torch.load(best_model_path, map_location=device))
+        
+        # Restore original parameters
+        self.args.train_epochs = original_epochs
+        self.args.learning_rate = original_lr
+        self.args.patience = original_patience
+        
+        # Instead of just restoring original data, combine both datasets for future reference
+        if new_data is not None:
+            
+            # Combine original and new data for future reference
+            if original_df is not None:
+                try:
+                    # Combine datasets while preserving index order
+                    combined_df = pd.concat([original_df, new_data]).drop_duplicates()
+                    self.args.df = combined_df
+                    print(f"Combined dataset created with {len(combined_df)} records for future reference")
+                except Exception as e:
+                    print(f"Error combining datasets: {e}")
+                    # Fallback to using just the new data
+                    self.args.df = new_data
+                    print(f"Using only new data with {len(new_data)} records for future reference")
+            else:
+                # If there was no original data, keep using the new data
+                self.args.df = new_data
+                
+        print("Retraining completed")
+        return self.model
