@@ -255,6 +255,7 @@ class Exp_Informer(Exp_Basic):
         preds = np.array(preds)
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         
+        self.predictions.insert(1, preds, axis=0)
         # result save
         folder_path = './results/' + setting +'/'
         if not os.path.exists(folder_path):
@@ -262,7 +263,7 @@ class Exp_Informer(Exp_Basic):
         
         np.save(folder_path+'real_prediction.npy', preds)
         
-        return
+        return pred_data.predictions
 
     def _process_one_batch(self, dataset_object, batch_x, batch_y, batch_x_mark, batch_y_mark):
         batch_x = batch_x.float().to(self.device)
